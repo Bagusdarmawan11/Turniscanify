@@ -1,0 +1,8 @@
+# Mengabaikan folder environment python (jika ada)
+venv/
+.env
+__pycache__/
+
+# Mengabaikan file sistem mac/windows
+.DS_Store
+Thumbs.db
