@@ -10,34 +10,29 @@ st.set_page_config(
     layout="centered"
 )
 
-st.title("📄 Turniscanify Watermark Replacer")
-st.write("Ubah watermark 'The Contributor Groupy' menjadi 'Turniscanify' dengan presisi.")
+st.title("📄 PDF Watermark Replacer")
+st.write("Hapus dan ganti teks watermark pada PDF dengan mudah.")
 
-# --- FUNGSI UTAMA (LOGIKA KAMU) ---
-def process_pdf_in_memory(input_bytes):
-    # Membuka PDF langsung dari bytes (memory), bukan dari path file
+# --- FUNGSI UTAMA ---
+# Sekarang fungsi ini menerima parameter old_text dan new_text dari input user
+def process_pdf_in_memory(input_bytes, old_text, new_text):
     doc = fitz.open(stream=input_bytes, filetype="pdf")
     count = 0
     
-    # --- PARAMETER FINE TUNING (Sesuai kode kamu) ---
+    # --- STYLE TETAP SEPERTI SEBELUMNYA ---
     UKURAN_FONT = 11
     WARNA_CUSTOM = (0.2, 0.2, 0.2) # Hex #333333
     GESER_X = 2  
     GESER_Y = -3.5 
-    
-    OLD_TEXT = "The Contributor Groupy"
-    NEW_TEXT = "Turniscanify"
 
-    # Progress bar sederhana
     progress_bar = st.progress(0)
     total_pages = len(doc)
 
     for page_num, page in enumerate(doc):
-        # Update progress bar
         progress_bar.progress((page_num + 1) / total_pages)
 
-        # 1. Cari teks target
-        quads = page.search_for(OLD_TEXT, quads=True)
+        # 1. Cari teks target sesuai input user
+        quads = page.search_for(old_text, quads=True)
         
         replacements = []
         for q in quads:
@@ -55,60 +50,72 @@ def process_pdf_in_memory(input_bytes):
                 page.add_redact_annot(rect_hapus)
             page.apply_redactions()
             
-            # B. Tulis "Turniscanify"
+            # B. Tulis Teks Baru sesuai input user
             for q, angle in replacements:
-                # Titik mulai dengan geseran
                 titik_mulai = fitz.Point(q.ll.x + GESER_X, q.ll.y + GESER_Y)
                 
                 page.insert_text(
                     titik_mulai,
-                    NEW_TEXT,
+                    new_text,
                     fontsize=UKURAN_FONT,
                     rotate=angle,
                     color=WARNA_CUSTOM,
                     fontname="helv"
                 )
 
-    # Kembalikan hasil sebagai bytes (agar bisa didownload)
     return doc.tobytes(), count
 
 # --- UI STREAMLIT ---
+# Membagi layar jadi 2 kolom agar rapi
+col1, col2 = st.columns(2)
+with col1:
+    input_teks_lama = st.text_input("Teks yang ingin dihapus:", value="The Contributor Groupy")
+with col2:
+    input_teks_baru = st.text_input("Teks pengganti:", value="Turniscanify")
+
 uploaded_file = st.file_uploader("Upload File PDF", type=["pdf"])
 
 if uploaded_file is not None:
-    # Tampilkan info file
     st.info(f"File terdeteksi: {uploaded_file.name}")
     
     # Tombol Eksekusi
     if st.button("Ubah Watermark Sekarang"):
-        try:
-            with st.spinner('Sedang memproses...'):
-                # Baca file ke memory
-                input_bytes = uploaded_file.read()
-                
-                # Jalankan fungsi
-                output_bytes, jumlah_ganti = process_pdf_in_memory(input_bytes)
-                
-                # --- LOGIKA PENAMAAN DINAMIS ---
-                # Ambil nama file asli tanpa ekstensi .pdf
-                nama_asli_base, _ = os.path.splitext(uploaded_file.name)
-                # Buat nama baru
-                nama_baru = f"{nama_asli_base}_By_Turniscanify.pdf"
-                
-                # Tampilkan Sukses
-                st.success(f"Berhasil! {jumlah_ganti} watermark telah diganti.")
-                
-                # Tombol Download
-                st.download_button(
-                    label="📥 Download Hasil PDF",
-                    data=output_bytes,
-                    file_name=nama_baru,
-                    mime="application/pdf",
-                    type="primary" # Membuat tombol lebih menonjol
-                )
-                
-        except Exception as e:
-            st.error(f"Terjadi kesalahan: {e}")
+        # Validasi: Pastikan form tidak kosong
+        if not input_teks_lama or not input_teks_baru:
+            st.warning("Mohon isi teks yang ingin dihapus dan teks penggantinya terlebih dahulu.")
+        else:
+            try:
+                with st.spinner('Sedang memproses...'):
+                    input_bytes = uploaded_file.read()
+                    
+                    # Jalankan fungsi dengan teks dari user
+                    output_bytes, jumlah_ganti = process_pdf_in_memory(
+                        input_bytes, 
+                        input_teks_lama, 
+                        input_teks_baru
+                    )
+                    
+                    # --- NAMA FILE DINAMIS ---
+                    nama_asli_base, _ = os.path.splitext(uploaded_file.name)
+                    # Nama file akan menggunakan input teks baru tanpa spasi yang berlebihan
+                    nama_baru_clean = input_teks_baru.replace(" ", "_")
+                    nama_baru = f"{nama_asli_base}_By_{nama_baru_clean}.pdf"
+                    
+                    if jumlah_ganti > 0:
+                        st.success(f"Berhasil! {jumlah_ganti} bagian teks telah diganti.")
+                        
+                        st.download_button(
+                            label="📥 Download Hasil PDF",
+                            data=output_bytes,
+                            file_name=nama_baru,
+                            mime="application/pdf",
+                            type="primary"
+                        )
+                    else:
+                        st.warning(f"Selesai diproses, tapi teks '{input_teks_lama}' tidak ditemukan di dalam PDF ini.")
+                    
+            except Exception as e:
+                st.error(f"Terjadi kesalahan: {e}")
 
 # Footer
 st.markdown("---")
